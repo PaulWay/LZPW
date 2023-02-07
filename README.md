@@ -1,0 +1,79 @@
+= LZPW =
+
+LZPW is an improvement on the Lempel-Ziv-Welch (LZW) compression algorithm.
+
+The `lzpw` library implements this compression algorithm.
+
+== Algorithm ==
+
+The main description of the LZPW algorithm is in the `Algorithm.md` file.
+
+Lempel-Ziv-Welch starts with a symbol table of 256 entries, one for each byte
+value.  It then adds symbols as they are seen and outputs only symbols of the
+longest possible symbol that matches the sequence of input bytes.
+
+The problems with LZW, as I see it, are three fold:
+
+Firstly, it is inefficient in encoding data it hasn't seen before.  Each byte
+becomes at least nine bits and, in the standard LZW algorithm, becomes twelve
+bits, a size increase of 50%.
+
+Secondly, it doesn't quickly adapt to patterns.  A repeat of a long string has
+to start by outputting the first two bytes as a symbol, then the next two, and
+so forth.  While these represent a 25% reduction (16 bits represented in 12),
+it would be good to find a way to encode this more efficiently.
+
+We do want to remain true to the 'symbol' philosophy of LZ78 and LZW.
+Therefore, the obvious solution to the second problem - to have a 'symbol'
+that encodes 'repeat this many bytes from this far away in the raw data' - is
+out as that is basically the LZ77 algorithm.  And so the solution to that is
+to try and encode more recently used symbols in fewer bits.
+
+The third problem is that the symbol table is bounded, usually at around 4095
+symbols (in the original LZW fixed 12-bit symbol implementation).  The answer
+to the symbol table filling is simply to flush all >1 byte symbols and start
+again.  While this does allow the algorithm to 'adapt' to changes in symbol
+frequency, it is expensive in loss of existing information.  It would be good
+to find a way to 'prune' the symbol table as it grows.
+
+So our goals are:
+
+* Encode literal bytes efficiently.
+* Encode symbols more efficiently.
+* Keep the symbol table from growing too large.
+
+== Concepts ==
+
+One basic concept used in this algorithm is that of the Fibonacci, or
+Zeckendorf, representation of positive integers.
+
+Reference:
+
+https://en.wikipedia.org/wiki/Fibonacci_coding
+
+Basically, base radices are the Fibonacci numbers (1, 2, 3, 5, 8, 13, ...)
+and numbers are written in little-endian bit order, with a one bit appended.
+Since (due to Zeckendorf's Theorem) such a number cannot have two consecutive
+one bits, reading two one bits is taken to signal the end of the number.  The
+first ten positive integers ('Natural numbers') with their Fibonacci codings
+are:
+
+1 = 11
+2 = 011
+3 = 0011
+4 = 1011
+5 = 00011
+6 = 10011
+7 = 01011
+8 = 000011
+9 = 100011
+10 = 010011
+
+Lengths and symbol indices are encoded using this method.
+
+== Requirements ==
+
+The `lzpw` library uses `pipenv` to install its requirements.
+
+Python development libraries (providing `Python.h`) need to be installed for
+the `bitstream` library.
