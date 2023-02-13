@@ -15,7 +15,7 @@ wander = 'wander, wandering wanderer - wondering wonder wand, wander.'
 
 # with open('symboliser.py') as fh:
 #     text = ''.join(fh.read())
-text = ironbark
+text = wander
 
 phi = (1+sqrt(5))/2
 save_text = ['save output to symbol table', 'discard output']
@@ -55,8 +55,12 @@ state = 'literal'
 bits_output = 0
 mabulate_flag = False
 output_lines = []
+
+# Different processing ideas that we're trying out
 use_variable_symbol_output = True
 move_to_front = True
+extra_output_bit = False
+block_type_bit = False
 
 
 def new_symbol(symbol):
@@ -87,6 +91,8 @@ def move_symbol_to_front(symbol):
     symbol_d = symbols[symbol]
     source_num = symbol_d['num']
     print(f"    Moving symbol {repr(symbol)} from {source_num} to 0")
+    if symbol_d['num'] == 0:
+        return
     # moved_symbols = []
     for s_key, s_val in symbols.items():
         if s_val['num'] < source_num:
@@ -99,17 +105,32 @@ def move_symbol_to_front(symbol):
 
 def output_literals(save=True):
     global to_write
-    save_bit = 0 if save else 1
-    print(f"--> 0{save_bit}: Output literal, {save_text[save_bit]}")
+    block_start = ''
+    block_start_desc = ''
+    if block_type_bit:
+        block_start = '0'
+        if extra_output_bit:
+            save_bit = 0 if save else 1
+            block_start += f"{save_bit}"
+            block_start_desc = ', ' + save_text[save_bit]
+    if block_start:
+        block_start += ' '
+    print(f"--> Output literals: {block_start}{block_start_desc}")
+    bits_written = len(block_start)
     to_write_len = len(to_write)
     len_bits = fib_encode(to_write_len)
+    bits_written += len(len_bits)
     print(f"  > {len_bits} ({len(len_bits)} bits): length of {to_write_len} characters to write")
-    print(f"  > (Output of {repr(''.join(to_write))} in binary): {to_write_len*8} bits")
+    output_bits = " ".join(f"{ord(b):08b}" for b in to_write)
+    output_bits_len = len(output_bits.replace(' ', ''))
+    bits_written += output_bits_len
+    print(f"  > {output_bits} {repr(''.join(to_write))}: {output_bits_len} bits")
     output_lines.append(
-        f"0{save_bit} {len_bits} {repr(''.join(to_write))}"
+        f"l {block_start}{len_bits} {output_bits} {repr(''.join(to_write))}"
     )
     to_write = []
-    return (2 + len(len_bits) + to_write_len * 8)
+    print(f"  = {bits_written} bits")
+    return bits_written
 
 
 def output_symbols_equal_length(output=True):
@@ -119,18 +140,34 @@ def output_symbols_equal_length(output=True):
     """
     # The symbols in to_write here are the actual strings that matched.
     global to_write
-    output_bit = 0 if output else 1
-    print(f"--> 1{output_bit}: Output symbols, {symbol_text[output_bit]}")
+
+    block_start = ''
+    block_start_desc = ''
+    if block_type_bit:
+        block_start = '0'
+        if extra_output_bit:
+            output_bit = 0 if output else 1
+            block_start += f"{output_bit}"
+            block_start_desc = ', ' + symbol_text[output_bit]
+    if block_start:
+        block_start += ' '
+    print(f"--> Output symbols: {block_start}{block_start_desc}")
+    bits_written = len(block_start)
+
     to_write_len = len(to_write)
     len_bits = fib_encode(to_write_len)
+    bits_written += len_bits
     print(f"  > {len_bits} ({len(len_bits)} bits): length of {to_write_len} characters to write")
     symbol_bits = int(log2(len(symbols))) + 1
-    encoded_list = []
+    encoded_symbols = list()
+    encoded_reprs = list()
     for symbol in to_write:
-        encoded_list.append(f"{repr(symbol)}({symbols[symbol]['num']})")
+        encoded_symbols.append(f"{symbols[symbol]['num']:0{symbol_bits}b}")
+        encoded_reprs.append(symbol)
         if move_to_front:
             move_symbol_to_front(symbol)
-    symb_encoding = ','.join(encoded_list)
+    bits_written += to_write_len * symbol_bits
+    symb_encoding = ' '.join(encoded_symbols)
     print(f"  > Symbols {symb_encoding} in {symbol_bits} bits each = {to_write_len * symbol_bits} bits")
     for symbol in to_write:
         symbols[symbol]['used in output'] += 1
@@ -138,10 +175,11 @@ def output_symbols_equal_length(output=True):
         for l in range(2, len(symbol)):
             symbols[symbol[:l]]['used as prefix'] += 1
     output_lines.append(
-        f"1{output_bit} {len_bits} {symb_encoding} in {symbol_bits} bits each"
+        f"s {block_start}{len_bits} {symb_encoding} {encoded_reprs}"
     )
     to_write = []
-    return (2 + len(len_bits) + to_write_len * symbol_bits)
+    print(f"  = {bits_written} bits")
+    return bits_written
 
 
 def output_symbols_variable_length(output=True):
@@ -150,20 +188,32 @@ def output_symbols_variable_length(output=True):
     """
     # The symbols in to_write here are the actual strings that matched.
     global to_write
-    output_bit = 0 if output else 1
-    print(f"--> 1{output_bit}: Output symbols, {symbol_text[output_bit]}")
-    bit_count = 2
+    block_start = ''
+    block_start_desc = ''
+    if block_type_bit:
+        block_start = '0'
+        if extra_output_bit:
+            output_bit = 0 if output else 1
+            block_start += f"{output_bit}"
+            block_start_desc = ', ' + symbol_text[output_bit]
+    if block_start:
+        block_start += ' '
+    print(f"--> Output symbols: {block_start}{block_start_desc}")
+    bits_written = len(block_start)
+
     to_write_len = len(to_write)
     len_bits = fib_encode(to_write_len)
-    bit_count += len(len_bits)
+    bits_written += len(len_bits)
     print(f"  > {len_bits} ({len(len_bits)} bits): {to_write_len} symbols to write")
     encoded_symbols = list()
+    encoded_reprs = list()
     for symbol in to_write:
         symbol_d = symbols[symbol]
         sym_fib = fib_encode(symbol_d['num']+1)  # Make sure symbol 0 encoded!
         print(f"  > symbol {repr(symbol)}({symbol_d['num']}) => {sym_fib} ({len(sym_fib)} bits)")
         encoded_symbols.append(sym_fib)
-        bit_count += len(sym_fib)
+        encoded_reprs.append(symbol)
+        bits_written += len(sym_fib)
         symbol_d['used in output'] += 1
         # Increment all 2+ length sub-symbols as prefixes used in this symbol
         for l in range(2, len(symbol)):
@@ -171,10 +221,48 @@ def output_symbols_variable_length(output=True):
         if move_to_front:
             move_symbol_to_front(symbol)
     output_lines.append(
-        f"1{output_bit} {len_bits} {' '.join(encoded_symbols)}"
+        f"s {block_start}{len_bits} {' '.join(encoded_symbols)} {encoded_reprs}"
     )
     to_write = []
-    return bit_count
+    print(f"  = {bits_written} bits")
+    return bits_written
+
+
+def find_all_sym_matches(current_symbols: list):
+    """
+    Yield lists of symbol sequences that match as much of the input list as
+    we can.  This starts with the minimum length (2) and looks for increasing
+    length symbols until it can find no more here.  We use this technique to
+    recursively search for further matches.
+
+    The complication here is that we get the list of currently matched
+    symbols as a list of strings, rather than one entire string.  Rather than
+    try and mangle symbols and step through them character by character, we
+    combine it into a big string and then work through that.
+    """
+    symbol_string = ''.join(current_symbols)
+    symbol_string_len = len(symbol_string)
+    # Find all the (remaining) suffix lists that have symbols in our symbol
+    # table from this start index
+    def find_suffixes_from(start_idx: int):
+        end_idx = start_idx + 2
+        while end_idx <= symbol_string_len:
+            this_sym = symbol_string[start_idx:end_idx]
+            if this_sym not in symbols:
+                break
+            for suffixes in find_suffixes_from(end_idx):
+                yield [this_sym] + suffixes
+            yield [this_sym]
+            end_idx += 1
+
+    # Return the list of symbol lists, where the last symbol is right at the
+    # end of the symbol string.  This is roughly in order of longest symbols
+    # last, but pays no attention to the encoding length of each symbol.
+    return [
+        symbol_list
+        for symbol_list in find_suffixes_from(0)
+        if symbol_list[-1] == symbol_string[-len(symbol_list[-1]):]
+    ]
 
 
 def output_symbols(output=True):
@@ -193,6 +281,10 @@ for char in text:
         continue
     sought_symbol = last_symbol + char
     if sought_symbol not in symbols:
+        if state == 'symbols' and to_write:
+            print(f"??? symbol list: {sorted(symbols.keys())}")
+            print(f"??? symbols matched: {to_write}, {repr(last_symbol)}, next char {repr(char)}")
+            print(f"??? possible other symbol matches to get us to this point: {find_all_sym_matches(to_write + [last_symbol] + [char])}")
         new_symbol(sought_symbol)
         print(f"not a symbol, add symbol {symbols[sought_symbol]['num']:3d} (mabulate {mabulate_flag})")
         if state == 'symbols':
@@ -207,7 +299,7 @@ for char in text:
             # length, and then the subsequent symbols can be at the new bit
             # length.  Need to work out what the efficient changeover length
             # is.
-            if len(symbols) == 2<<int(log2(len(symbols))):
+            if len(symbols) == 2<<int(log2(len(symbols))) and not use_variable_symbol_output:
                 print(f"... Symbol table is an even power of two, maybe we should write out the symbols?")
             # We might have got 'ca', where 'c' is a prefix (and matched
             # last time we got here) and 'a' is a prefix but 'ca' is not yet
