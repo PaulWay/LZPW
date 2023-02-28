@@ -24,8 +24,9 @@ symbol_text = ['output symbols', 'delete symbols']
 
 fibs = [1, 2, 3]
 fib_encodings = {1: '11', 2: '011', 3: '0011'}
+fib_decodings = {v: e for e, v in fib_encodings.items()}
 
-def fib_encode(i):
+def fib_encode(i: int):
     assert i > 0, "Cannot encode zero in Fibonacci encoding"
     if i in fib_encodings:
         return fib_encodings[i]
@@ -37,14 +38,37 @@ def fib_encode(i):
             fibs.append(fibs[-1] + fibs[-2])
     # Now calculate back from most significant bit
     bits = '1'  # to terminate
+    i_temp = i
     for fib_idx in reversed(range(fib_gt_idx)):  # count from largest index down...
-        if i >= fibs[fib_idx]:
+        if i_temp >= fibs[fib_idx]:
             bits = '1' + bits
-            i -= fibs[fib_idx]
+            i_temp -= fibs[fib_idx]
         else:
             bits = '0' + bits
     fib_encodings[i] = bits
+    fib_decodings[bits] = i
     return bits
+
+
+def fib_decode(bits: str) -> int:
+    assert bits, "Cannot decode an empty string"
+    if bits in fib_decodings:
+        return fib_decodings[bits]
+
+    a, b = fibs[:2]
+    val = 0
+    last = ''
+    # Simple walk up the Fibonacci sequence...
+    for bit in bits:
+        if bit == '1' and last == '1':
+            break
+        if bit == '1':
+            val += a
+        a, b = b, b+a
+        last = bit
+    fib_decodings[bits] = val
+    fib_encodings[val] = bits
+    return val
 
 
 # State information
