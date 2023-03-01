@@ -16,7 +16,7 @@ reblocktest = 'AbCd.AbCd,AbCdCd;AbCdCd:AbCdAbCd.'
 
 # with open('symboliser.py') as fh:
 #     text = ''.join(fh.read())
-text = reblocktest
+text = ironbark
 
 phi = (1+sqrt(5))/2
 save_text = ['save output to symbol table', 'discard output']
@@ -104,7 +104,7 @@ def output_literals(output_lines: list, to_write: list, save=True):
     bits_written += output_bits_len
     print(f"  > {output_bits} {repr(''.join(to_write))}: {output_bits_len} bits")
     output_lines.append(
-        f"l {block_start}{len_bits} {output_bits} {repr(''.join(to_write))}"
+        f"l {block_start}{len_bits} {output_bits} # {repr(''.join(to_write))}"
     )
     # caller has to clear to_write now we're functionalised.
     print(f"  = {bits_written} bits")
@@ -237,7 +237,7 @@ def output_symbols(symbols: dict, output_lines: list, to_write: list, output=Tru
             symbols[symbol[:l]]['used as prefix'] += 1
 
     output_lines.append(
-        f"s {block_start}{len_bits} {' '.join(encoded_symbols)} {to_write}"
+        f"s {block_start}{len_bits} {' '.join(encoded_symbols)} # {to_write}"
     )
 
     # Caller has to clear to_write now we're functionalised
@@ -310,7 +310,7 @@ def encode(text: str):
             # if state == 'symbols' and to_write:
             #     alternate_matches = find_all_sym_matches(to_write + [last_symbol] + [char])
             new_symbol(symbols, sought_symbol, first_chars)
-            print(f"not a symbol, add symbol {symbols[sought_symbol]['num']:3d} (mabulate {mabulate_flag}")
+            print(f"not a symbol, add symbol {symbols[sought_symbol]['num']:3d} ({mabulate_flag=})")
             if state == 'symbols':
                 # if to_write and alternate_matches:
                 #     print(f"??? symbols matched: {to_write}, {repr(last_symbol)}, next char {repr(char)}")
@@ -343,7 +343,7 @@ def encode(text: str):
                             to_write = minimal_encoding
                             encoding = get_symbol_encoding(symbols, minimal_encoding, move_to_front)  # now do move to front
                             last_symbol = char
-                            mabulate_flag = False
+                            mabulate_flag = True  # Have to mabulate on a single character last symbol
                             print(f"T$$ new minimal {to_write=} {last_symbol=} mabulate -> False")
                             continue
                 # If we've read 'abcdab' and we've just read 'c', we don't have an
@@ -409,7 +409,7 @@ def encode(text: str):
                 to_write = []
                 state = 'symbols'
                 # Print symbol table
-                print("SSS " + ', '.join(f"{symbols[sym]['num']}={repr(sym)}" for sym in sorted(symbols.keys(), key=lambda s: symbols[s]['num'])))
+                print("SSS " + ', '.join(f"{symbols[sym]['num']}={repr(sym)}" for sym in sorted(symbols.keys())))
                 # If we're trying to find shorter symbol matches, remember the
                 # highest numbered symbol at this point.  This gives a kind of
                 # 'upper bound' on symbols that can be matched without the
