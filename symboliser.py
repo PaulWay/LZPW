@@ -13,10 +13,11 @@ simple = 'abababababababababababaa'
 four = 'abcdabcdabcdabcdabcdabcdabcdabcd'
 wander = 'wander, wanderingwanderer - wondering wonder wand, wander.'
 reblocktest = 'AbCd.AbCd,AbCdCd;AbCdCd:AbCdAbCd.'
+banana = 'Banana Banana Banana Banana'
 
 # with open('symboliser.py') as fh:
 #     text = ''.join(fh.read())
-text = ironbark
+text = banana
 
 phi = (1+sqrt(5))/2
 save_text = ['save output to symbol table', 'discard output']
@@ -74,6 +75,7 @@ def fib_decode(bits: str) -> int:
 # Different processing ideas that we're trying out
 use_variable_symbol_output = True
 move_to_front = True
+move_to_half_way = False  # only if move_to_front set
 extra_output_bit = False
 block_type_bit = False
 try_shorter_symbol_matches = True
@@ -143,16 +145,19 @@ def move_symbol_to_front(symbols: dict, symbol):
     symbol_d = symbols[symbol]
     source_num = symbol_d['num']
     # print(f"    Moving symbol {repr(symbol)} from {source_num} to 0")
-    if symbol_d['num'] == 0:
+    target_num = 0
+    if move_to_half_way:
+        target_num = int(source_num/2)
+        print(f"   Moving symbol {repr(symbol)} from {source_num} to {target_num}")
+    if source_num == target_num:
         return
     for s_key, s_val in symbols.items():
-        if s_val['num'] < source_num:
+        if s_val['num'] < source_num and s_val['num'] >= target_num:
             # print(f"   -> mv {repr(s_key)} from {s_val['num']} to {s_val['num']+1}")
             s_val['num'] += 1
-    symbol_d['num'] = 0
+    symbol_d['num'] = target_num
 
     if move_child_symbols_to_front:
-        target_num = 0
         # Grab child symbols in order of how recently they've been moved to front
         for child_symbol in sorted(symbol_d['child symbols'], key=lambda s: symbols[s]['num']):
             target_num += 1
@@ -425,6 +430,8 @@ def encode(text: str):
 
     print(f"End of text.  State={state}, mabulate_flag={mabulate_flag}, sought_symbol={repr(sought_symbol)}, last_symbol={repr(last_symbol)}, char={repr(char)}")
     if state == 'symbols':
+        if not mabulate_flag:
+            to_write.append(sought_symbol)
         if try_shorter_symbol_matches:
             print(f"tss {to_write=}, {char=}, {highest_usable_symbol=}")
             if to_write:
@@ -447,8 +454,6 @@ def encode(text: str):
                     last_symbol = char
                     mabulate_flag = False
                     print(f"T$F new minimal {to_write=} {last_symbol=} mabulate -> False")
-        elif not mabulate_flag:
-            to_write.append(symbols, sought_symbol)
         bits_output += output_symbols(symbols, output_lines, to_write)
         to_write = []
 
