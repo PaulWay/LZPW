@@ -1,25 +1,69 @@
 #!/usr/bin/env python
 
-from math import log, log2, sqrt
+import argparse
+from math import log2
 
 # Constants
-ironbark = """It was the man from Ironbark that struck the Sydney town,
-He wandered over street and park, he wandered up and down.
-He loitered here, he loitered there, 'til he was like to drop,
-Until at last in sheer despair he sought a barber shop.
-"'Ere, shave me beard and whiskers off, I'll be a man of mark,
-I'll go and do the Sydney toff up home in Ironbark"."""
-simple = 'abababababababababababaa'
-four = 'abcdabcdabcdabcdabcdabcdabcdabcd'
-wander = 'wander, wanderingwanderer - wondering wonder wand, wander.'
-reblocktest = 'AbCd.AbCd,AbCdCd;AbCdCd:AbCdAbCd.'
-banana = 'Banana Banana Banana Banana'
+with open('symboliser.py') as fh:
+    symboliser = ''.join(fh.read())
+text_options = {
+    'ironbark': """It was the man from Ironbark that struck the Sydney town,
+    He wandered over street and park, he wandered up and down.
+    He loitered here, he loitered there, 'til he was like to drop,
+    Until at last in sheer despair he sought a barber shop.
+    "'Ere, shave me beard and whiskers off, I'll be a man of mark,
+    I'll go and do the Sydney toff up home in Ironbark".""",
+    'simple': 'abababababababababababaa',
+    'four': 'abcdabcdabcdabcdabcdabcdabcdabcd',
+    'wander': 'wander, wandering wanderer - wondering wonder wand, wander.',
+    'reblocktest': 'AbCd.AbCd,AbCdCd;AbCdCd:AbCdAbCd.',
+    'banana': 'Banana Banana Banana Banana',
+    'symboliser': symboliser,
+}
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    '--debug', '-d', default=False, action='store_true',
+    help='Show planning information while encoding/decoding'
+)
+parser.add_argument(
+    '--verbose', '-v', default=False, action='store_true',
+    help='Show input/output information while encoding/decoding'
+)
+parser.add_argument(
+    '--text', '-t', default='ironbark', choices=text_options.keys(),
+    help='Select one of the standard texts available'
+)
+parser.add_argument(
+    '--variable-symbol-output', default=False, action='store_true',
+    help='Output Fibonacci coded symbols rather than fixed-width symbols'
+)
+parser.add_argument(
+    '--move-to-front', default=False, action='store_true',
+    help='When a symbol is used, move it to the shortest encoding position'
+)
+parser.add_argument(
+    '--move-to-half-way', default=False, action='store_true',
+    help='If move-to-front, move the symbol half-way to the shortest position'
+)
+parser.add_argument(
+    '--reverse-symbol-numbers', default=False, action='store_true',
+    help='Reverse symbol number encodings (more recently symbols have smaller encodings)'
+)
+parser.add_argument(
+    '--try-shorter-symbol-matches', default=False, action='store_true',
+    help='Try all possible recombinations of the symbols to find a shorter match'
+)
+parser.add_argument(
+    '--move-child-symbols-to-front', default=False, action='store_true',
+    help="If move-to-front, move the used symbol's children to the front as well"
+)
+parser.add_argument(
+    '--add-suffix-symbols', default=False, action='store_true',
+    help="When adding a symbol longer then two characters, add its suffixes as well"
+)
+args = parser.parse_args()
+text = text_options[args.text]
 
-# with open('symboliser.py') as fh:
-#     text = ''.join(fh.read())
-text = banana
-
-phi = (1+sqrt(5))/2
 save_text = ['save output to symbol table', 'discard output']
 symbol_text = ['output symbols', 'delete symbols']
 
@@ -72,14 +116,26 @@ def fib_decode(bits: str) -> int:
     return val
 
 
-# Different processing ideas that we're trying out
-use_variable_symbol_output = True
-move_to_front = True
-move_to_half_way = False  # only if move_to_front set
+# Old ideas that are mostly proven but we can still experiment with
+use_variable_symbol_output = args.variable_symbol_output
 extra_output_bit = False
 block_type_bit = False
-try_shorter_symbol_matches = True
-move_child_symbols_to_front = False
+# Different processing ideas that we're trying out
+move_to_front = args.move_to_front
+move_to_half_way = args.move_to_half_way  # only works if move_to_front set
+try_shorter_symbol_matches = args.try_shorter_symbol_matches
+move_child_symbols_to_front = args.move_child_symbols_to_front
+reverse_symbol_numbers = args.reverse_symbol_numbers
+add_suffix_symbols = args.add_suffix_symbols
+
+print("Configuration:")
+print(f" * {use_variable_symbol_output=}")
+print(f" * {move_to_front=}")
+print(f" * {move_to_half_way=}")
+print(f" * {move_child_symbols_to_front=}")
+print(f" * {reverse_symbol_numbers=}")
+print(f" * {try_shorter_symbol_matches=}")
+print(f" * {add_suffix_symbols=}")
 
 
 # Encoding functions
@@ -114,6 +170,8 @@ def output_literals(output_lines: list, to_write: list, save=True):
 
 
 def new_symbol(symbols: dict, symbol: str, first_chars: set):
+    if symbol in symbols:  # just in case
+        return  # or should we do something like move-to-front here?
     symbols[symbol] = {
         'num': len(symbols),
         'used as prefix': 0,
@@ -138,36 +196,41 @@ def move_symbol_to_front(symbols: dict, symbol):
     and no other way to iterate through them, we have to do a full dictionary
     scan for this.
     """
-    # Does it make a difference that we're choosing to output this list
-    # after all the symbols have been emitted?  Could we output 'ab', 'cd'
-    # and then 'cd', at which time 'cd' would be symbol 0 and have encoding
-    # 1?
+    comparer = lambda src, x, tgt: tgt <= x < src
+    target_num = 0
+    increment = 1
     symbol_d = symbols[symbol]
     source_num = symbol_d['num']
-    # print(f"    Moving symbol {repr(symbol)} from {source_num} to 0")
-    target_num = 0
+
     if move_to_half_way:
         target_num = int(source_num/2)
-        print(f"   Moving symbol {repr(symbol)} from {source_num} to {target_num}")
+    if reverse_symbol_numbers:
+        comparer = lambda src, x, tgt: tgt >= x > src
+        target_num = len(symbols)-1
+        increment = -1
+        if move_to_half_way:
+            target_num = target_num - int((target_num - source_num)/2)
+
+    print(f"    Moving symbol {repr(symbol)} from {source_num} to {target_num} in {len(symbols)} symbols")
     if source_num == target_num:
         return
     for s_key, s_val in symbols.items():
-        if s_val['num'] < source_num and s_val['num'] >= target_num:
+        if comparer(source_num, s_val['num'], target_num):
             # print(f"   -> mv {repr(s_key)} from {s_val['num']} to {s_val['num']+1}")
-            s_val['num'] += 1
+            s_val['num'] += increment
     symbol_d['num'] = target_num
 
     if move_child_symbols_to_front:
         # Grab child symbols in order of how recently they've been moved to front
         for child_symbol in sorted(symbol_d['child symbols'], key=lambda s: symbols[s]['num']):
-            target_num += 1
+            target_num += increment
             source_num = symbols[child_symbol]['num']
-            print(f"   -> mv child {child_symbol} from {source_num} to {target_num}")
+            print(f"   -> mv child {repr(child_symbol)} from {source_num} to {target_num}")
             if source_num == target_num:
                 continue
             for s_key, s_val in symbols.items():
-                if s_val['num'] < source_num and s_val['num'] >= target_num:
-                    s_val['num'] += 1
+                if comparer(source_num, s_val['num'], target_num):
+                    s_val['num'] += increment
             symbols[child_symbol]['num'] = target_num
 
 
@@ -193,7 +256,11 @@ def output_symbols_variable_length(symbols: dict, to_write, move_to_front):
     encoded_symbols = list()
     for symbol in to_write:
         symbol_d = symbols[symbol]
-        sym_fib = fib_encode(symbol_d['num']+1)  # Make sure symbol 0 encoded!
+        if reverse_symbol_numbers:
+            sym_max = len(symbols)
+            sym_fib = fib_encode(sym_max-symbol_d['num'])
+        else:
+            sym_fib = fib_encode(symbol_d['num']+1)  # Make sure symbol 0 encoded!
         encoded_symbols.append(sym_fib)
         if move_to_front:
             move_symbol_to_front(symbols, symbol)
@@ -315,7 +382,12 @@ def encode(text: str):
             # if state == 'symbols' and to_write:
             #     alternate_matches = find_all_sym_matches(to_write + [last_symbol] + [char])
             new_symbol(symbols, sought_symbol, first_chars)
-            print(f"not a symbol, add symbol {symbols[sought_symbol]['num']:3d} ({mabulate_flag=})")
+            print(f"not a symbol, add symbol {symbols[sought_symbol]['num']} ({mabulate_flag=})")
+            if add_suffix_symbols and len(sought_symbol) > 2:
+                # Add all the suffixes; new_symbol doesn't duplicate symbols
+                for pos in range(1, len(sought_symbol)-1):
+                    new_symbol(symbols, sought_symbol[pos:], first_chars)
+                    print(f"    also add {repr(sought_symbol[pos:])} as symbol {symbols[sought_symbol[pos:]]['num']}")
             if state == 'symbols':
                 # if to_write and alternate_matches:
                 #     print(f"??? symbols matched: {to_write}, {repr(last_symbol)}, next char {repr(char)}")
@@ -329,7 +401,7 @@ def encode(text: str):
                 # backtracked to a shorter symbol, we could match 'AB', 'CD', and
                 # then 'CD'.
                 if try_shorter_symbol_matches:
-                    print(f"tss to_write {to_write}, last_symbol {last_symbol}, next_char {char}, {char in first_chars=}, sought symbol {sought_symbol}, {highest_usable_symbol=}")
+                    print(f"tss to_write {to_write}, last_symbol {repr(last_symbol)}, next_char {repr(char)}, {char in first_chars=}, sought symbol {sought_symbol}, {highest_usable_symbol=}")
                     if to_write and len(to_write[-1]) > 2 and char in first_chars:
                         alternate_matches = find_all_sym_matches(symbols, to_write + [last_symbol], highest_usable_symbol)
                         minimal_encoding = []
@@ -413,14 +485,16 @@ def encode(text: str):
                 bits_output += output_literals(output_lines, to_write)
                 to_write = []
                 state = 'symbols'
-                # Print symbol table
-                print("SSS " + ', '.join(f"{symbols[sym]['num']}={repr(sym)}" for sym in sorted(symbols.keys())))
                 # If we're trying to find shorter symbol matches, remember the
                 # highest numbered symbol at this point.  This gives a kind of
                 # 'upper bound' on symbols that can be matched without the
                 # rearrangement of the matched symbols screwing up what symbols
                 # have actually been seen by the decoder.
                 if try_shorter_symbol_matches:
+                    print("SSS " + ', '.join(
+                        f"{symbols[sym]['num']}={repr(sym)}"
+                        for sym in sorted(symbols.keys())
+                    ))
                     highest_usable_symbol = len(symbols) - 1
             # We don't append the symbol here - because this might be the prefix
             # of a longer symbol.  We append the symbol when we no longer match,
@@ -464,15 +538,15 @@ def encode(text: str):
         bits_output += output_literals(output_lines, to_write)
         to_write = []
 
-    print("Symbols:")
-    for symbol in sorted(symbols, key=lambda s: symbols[s]['num']):
-        sym_data = symbols[symbol]
-        print(
-            f"{sym_data['num']:3d}: {repr(symbol)} "
-            f"output {sym_data['used in output']} times, "
-            f"prefixed {sym_data['used as prefix']} times, "
-            f"child symbols {sym_data['child symbols']}."
-        )
+    # print("Symbols:")
+    # for symbol in sorted(symbols, key=lambda s: symbols[s]['num']):
+    #     sym_data = symbols[symbol]
+    #     print(
+    #         f"{sym_data['num']:3d}: {repr(symbol)} "
+    #         f"output {sym_data['used in output']} times, "
+    #         f"prefixed {sym_data['used as prefix']} times, "
+    #         f"child symbols {sym_data['child symbols']}."
+    #     )
 
     return bits_output, output_lines
 
