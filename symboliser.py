@@ -4,22 +4,6 @@ import argparse
 from math import log2
 
 # Constants
-with open('symboliser.py') as fh:
-    symboliser = ''.join(fh.read())
-text_options = {
-    'ironbark': """It was the man from Ironbark that struck the Sydney town,
-    He wandered over street and park, he wandered up and down.
-    He loitered here, he loitered there, 'til he was like to drop,
-    Until at last in sheer despair he sought a barber shop.
-    "'Ere, shave me beard and whiskers off, I'll be a man of mark,
-    I'll go and do the Sydney toff up home in Ironbark".""",
-    'simple': 'abababababababababababaa',
-    'four': 'abcdabcdabcdabcdabcdabcdabcdabcd',
-    'wander': 'wander, wandering wanderer - wondering wonder wand, wander.',
-    'reblocktest': 'AbCd.AbCd,AbCdCd;AbCdCd:AbCdAbCd.',
-    'banana': 'Banana Banana Banana Banana',
-    'symboliser': symboliser,
-}
 parser = argparse.ArgumentParser()
 parser.add_argument(
     '--debug', '-d', default=False, action='store_true',
@@ -30,7 +14,7 @@ parser.add_argument(
     help='Show input/output information while encoding/decoding'
 )
 parser.add_argument(
-    '--text', '-t', default='ironbark', choices=text_options.keys(),
+    '--file', '-f', type=argparse.FileType('r'),
     help='Select one of the standard texts available'
 )
 parser.add_argument(
@@ -62,7 +46,13 @@ parser.add_argument(
     help="When adding a symbol longer then two characters, add its suffixes as well"
 )
 args = parser.parse_args()
-text = text_options[args.text]
+if not args.file:
+    print("No input file supplied")
+    exit
+if not args.file.readable():
+    print("Cannot read input file")
+    exit
+text = ''.join(args.file.readlines())
 
 save_text = ['save output to symbol table', 'discard output']
 symbol_text = ['output symbols', 'delete symbols']
