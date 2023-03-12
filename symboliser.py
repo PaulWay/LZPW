@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 
 import argparse
+import logging
 from math import log2
+
+log = logging.getLogger(__name__)
+l_h = logging.StreamHandler()
+log.addHandler(l_h)
 
 # Constants
 parser = argparse.ArgumentParser()
@@ -52,6 +57,14 @@ if not args.file:
 if not args.file.readable():
     print("Cannot read input file")
     exit
+if args.debug:
+    log.setLevel(logging.DEBUG)
+elif args.verbose:
+    log.setLevel(logging.INFO)
+else:
+    log.setLevel(logging.WARNING)
+
+
 text = ''.join(args.file.readlines())
 
 save_text = ['save output to symbol table', 'discard output']
@@ -118,14 +131,14 @@ move_child_symbols_to_front = args.move_child_symbols_to_front
 reverse_symbol_numbers = args.reverse_symbol_numbers
 add_suffix_symbols = args.add_suffix_symbols
 
-print("Configuration:")
-print(f" * {use_variable_symbol_output=}")
-print(f" * {move_to_front=}")
-print(f" * {move_to_half_way=}")
-print(f" * {move_child_symbols_to_front=}")
-print(f" * {reverse_symbol_numbers=}")
-print(f" * {try_shorter_symbol_matches=}")
-print(f" * {add_suffix_symbols=}")
+log.info("Configuration:")
+log.info(f" * {use_variable_symbol_output=}")
+log.info(f" * {move_to_front=}")
+log.info(f" * {move_to_half_way=}")
+log.info(f" * {move_child_symbols_to_front=}")
+log.info(f" * {reverse_symbol_numbers=}")
+log.info(f" * {try_shorter_symbol_matches=}")
+log.info(f" * {add_suffix_symbols=}")
 
 
 # Encoding functions
@@ -141,21 +154,21 @@ def output_literals(output_lines: list, to_write: list, save=True):
             block_start_desc = ', ' + save_text[save_bit]
     if block_start:
         block_start += ' '
-    print(f"--> Output literals: {block_start}{block_start_desc}")
+    log.info(f"--> Output literals: {block_start}{block_start_desc}")
     bits_written = len(block_start)
     to_write_len = len(to_write)
     len_bits = fib_encode(to_write_len)
     bits_written += len(len_bits)
-    print(f"  > {len_bits} ({len(len_bits)} bits): length of {to_write_len} characters to write")
+    log.info(f"  > {len_bits} ({len(len_bits)} bits): length of {to_write_len} characters to write")
     output_bits = " ".join(f"{ord(b):08b}" for b in to_write)
     output_bits_len = len(output_bits.replace(' ', ''))
     bits_written += output_bits_len
-    print(f"  > {output_bits} {repr(''.join(to_write))}: {output_bits_len} bits")
+    log.info(f"  > {output_bits} {repr(''.join(to_write))}: {output_bits_len} bits")
     output_lines.append(
         f"l {block_start}{len_bits} {output_bits} # {repr(''.join(to_write))}"
     )
     # caller has to clear to_write now we're functionalised.
-    print(f"  = {bits_written} bits")
+    log.info(f"  = {bits_written} bits")
     return bits_written
 
 
@@ -201,12 +214,12 @@ def move_symbol_to_front(symbols: dict, symbol):
         if move_to_half_way:
             target_num = target_num - int((target_num - source_num)/2)
 
-    print(f"    Moving symbol {repr(symbol)} from {source_num} to {target_num} in {len(symbols)} symbols")
+    log.debug(f"    Moving symbol {repr(symbol)} from {source_num} to {target_num} in {len(symbols)} symbols")
     if source_num == target_num:
         return
     for s_key, s_val in symbols.items():
         if comparer(source_num, s_val['num'], target_num):
-            # print(f"   -> mv {repr(s_key)} from {s_val['num']} to {s_val['num']+1}")
+            # log.debug(f"   -> mv {repr(s_key)} from {s_val['num']} to {s_val['num']+1}")
             s_val['num'] += increment
     symbol_d['num'] = target_num
 
@@ -215,7 +228,7 @@ def move_symbol_to_front(symbols: dict, symbol):
         for child_symbol in sorted(symbol_d['child symbols'], key=lambda s: symbols[s]['num']):
             target_num += increment
             source_num = symbols[child_symbol]['num']
-            print(f"   -> mv child {repr(child_symbol)} from {source_num} to {target_num}")
+            log.debug(f"   -> mv child {repr(child_symbol)} from {source_num} to {target_num}")
             if source_num == target_num:
                 continue
             for s_key, s_val in symbols.items():
@@ -276,21 +289,21 @@ def output_symbols(symbols: dict, output_lines: list, to_write: list, output=Tru
             block_start_desc = ', ' + symbol_text[output_bit]
     if block_start:
         block_start += ' '
-    print(f"--> Output symbols: {block_start}{block_start_desc}")
+    log.info(f"--> Output symbols: {block_start}{block_start_desc}")
     bits_written = len(block_start)
 
     to_write_len = len(to_write)
     len_bits = fib_encode(to_write_len)
     bits_written += len(len_bits)
-    print(f"  > {len_bits} ({len(len_bits)} bits): {to_write_len} symbols to write")
+    log.info(f"  > {len_bits} ({len(len_bits)} bits): {to_write_len} symbols to write")
 
     encoded_symbols = get_symbol_encoding(symbols, to_write, move_to_front)
 
     bits_written += sum(len(enc_sym) for enc_sym in encoded_symbols)
     symb_encoding = ' '.join(encoded_symbols)
-    # print(f"  > Symbols {symb_encoding} in {symbol_bits} bits each = {to_write_len * symbol_bits} bits")
-    #     print(f"  > symbol {repr(symbol)}({symbol_d['num']}) => {sym_fib} ({len(sym_fib)} bits)")
-    print(f"  > {' '.join(encoded_symbols)} (symbols {to_write})")
+    # log.info(f"  > Symbols {symb_encoding} in {symbol_bits} bits each = {to_write_len * symbol_bits} bits")
+    #     log.info(f"  > symbol {repr(symbol)}({symbol_d['num']}) => {sym_fib} ({len(sym_fib)} bits)")
+    log.info(f"  > {' '.join(encoded_symbols)} (symbols {to_write})")
 
     for symbol in to_write:
         symbols[symbol]['used in output'] += 1
@@ -303,7 +316,7 @@ def output_symbols(symbols: dict, output_lines: list, to_write: list, output=Tru
     )
 
     # Caller has to clear to_write now we're functionalised
-    print(f"  = {bits_written} bits")
+    log.info(f"  = {bits_written} bits")
     return bits_written
 
 
@@ -320,7 +333,7 @@ def find_all_sym_matches(symbols: dict, current_symbols: list, last_symbol_allow
     combine it into a big string and then work through that.
     """
     symbol_string = ''.join(current_symbols)
-    # print(f"FAS total symbol string: {symbol_string}")
+    # log.debug(f"FAS total symbol string: {symbol_string}")
     symbol_string_len = len(symbol_string)
     # Find all the (remaining) suffix lists that have symbols in our symbol
     # table from this start index
@@ -360,11 +373,10 @@ def encode(text: str):
     highest_usable_symbol = 0   # only with try_shorter_symbol_matches
 
     for char in text:
-        print(f"<-- {state}: last {repr(last_symbol)}+{repr(char)} ", end='')
         if not last_symbol:
             last_symbol = char
             to_write.append(char)
-            print("first character")
+            log.info(f"<-- {state}: last {repr(last_symbol)}+{repr(char)} first character")
             continue
         sought_symbol = last_symbol + char
         # alternate_matches = []
@@ -372,26 +384,26 @@ def encode(text: str):
             # if state == 'symbols' and to_write:
             #     alternate_matches = find_all_sym_matches(to_write + [last_symbol] + [char])
             new_symbol(symbols, sought_symbol, first_chars)
-            print(f"not a symbol, add symbol {symbols[sought_symbol]['num']} ({mabulate_flag=})")
+            log.info(f"<-- {state}: last {repr(last_symbol)}+{repr(char)} not a symbol, add symbol {symbols[sought_symbol]['num']} ({mabulate_flag=})")
             if add_suffix_symbols and len(sought_symbol) > 2:
                 # Add all the suffixes; new_symbol doesn't duplicate symbols
                 for pos in range(1, len(sought_symbol)-1):
                     new_symbol(symbols, sought_symbol[pos:], first_chars)
-                    print(f"    also add {repr(sought_symbol[pos:])} as symbol {symbols[sought_symbol[pos:]]['num']}")
+                    log.debug(f"    also add {repr(sought_symbol[pos:])} as symbol {symbols[sought_symbol[pos:]]['num']}")
             if state == 'symbols':
                 # if to_write and alternate_matches:
-                #     print(f"??? symbols matched: {to_write}, {repr(last_symbol)}, next char {repr(char)}")
+                #     log.debug(f"??? symbols matched: {to_write}, {repr(last_symbol)}, next char {repr(char)}")
                 #     for match in alternate_matches:
                 #         encoding = get_symbol_encoding(match, False)  # no move to front here
                 #         encoding_len = sum(len(sym_enc) for sym_enc in encoding)
-                #         print("??? alternate match [" + ', '.join(f"{repr(s)}={symbols[s]['num']}" for s in match) + f"] in {encoding_len} bits")
+                #         log.debug("??? alternate match [" + ', '.join(f"{repr(s)}={symbols[s]['num']}" for s in match) + f"] in {encoding_len} bits")
                 # The shortest thing I've found to trigger this is 'ABCD.ABCD,ABCDCD'
                 # at the third set of letters, the first symbol found is 'ABC',
                 # we then look for a symbol 'DC' which doesn't exist.  But if we
                 # backtracked to a shorter symbol, we could match 'AB', 'CD', and
                 # then 'CD'.
                 if try_shorter_symbol_matches:
-                    print(f"tss to_write {to_write}, last_symbol {repr(last_symbol)}, next_char {repr(char)}, {char in first_chars=}, sought symbol {sought_symbol}, {highest_usable_symbol=}")
+                    log.debug(f"tss to_write {to_write}, last_symbol {repr(last_symbol)}, next_char {repr(char)}, {char in first_chars=}, sought symbol {sought_symbol}, {highest_usable_symbol=}")
                     if to_write and len(to_write[-1]) > 2 and char in first_chars:
                         alternate_matches = find_all_sym_matches(symbols, to_write + [last_symbol], highest_usable_symbol)
                         minimal_encoding = []
@@ -402,7 +414,7 @@ def encode(text: str):
                             if not minimal_encoding or minimal_encoding_len > encoding_len:
                                 minimal_encoding = match
                                 minimal_encoding_len = encoding_len
-                            print("TSS alternate match [" + ', '.join(f"{repr(s)}={symbols[s]['num']}" for s in match) + f"] in {encoding_len} bits")
+                            log.debug("TSS alternate match [" + ', '.join(f"{repr(s)}={symbols[s]['num']}" for s in match) + f"] in {encoding_len} bits")
                         if minimal_encoding:
                             # This absorbs to_write and last_symbol, but leaves
                             # the next character.  We now have to continue here as
@@ -411,13 +423,13 @@ def encode(text: str):
                             encoding = get_symbol_encoding(symbols, minimal_encoding, move_to_front)  # now do move to front
                             last_symbol = char
                             mabulate_flag = True  # Have to mabulate on a single character last symbol
-                            print(f"T$$ new minimal {to_write=} {last_symbol=} mabulate -> False")
+                            log.debug(f"T$$ new minimal {to_write=} {last_symbol=} mabulate -> False")
                             continue
                 # If we've read 'abcdab' and we've just read 'c', we don't have an
                 # 'abc' symbol yet, but we might be able to write symbols 'ab' and
                 # 'cd' if 'c' is the prefix to a symbol.
                 if not mabulate_flag:
-                    print(f"... mabulate flag false, saving last matched symbol {repr(last_symbol)}")
+                    log.debug(f"... mabulate flag false, saving last matched symbol {repr(last_symbol)}")
                     to_write.append(last_symbol)
                 # If the symbol table is at a power of two size, then it may be
                 # more efficient to output the current symbols at the current bit
@@ -425,7 +437,7 @@ def encode(text: str):
                 # length.  Need to work out what the efficient changeover length
                 # is.
                 if len(symbols) == 2<<int(log2(len(symbols))) and not use_variable_symbol_output:
-                    print(f"... Symbol table is an even power of two, maybe we should write out the symbols?")
+                    log.debug(f"... Symbol table is an even power of two, maybe we should write out the symbols?")
                 # We might have got 'ca', where 'c' is a prefix (and matched
                 # last time we got here) and 'a' is a prefix but 'ca' is not yet
                 # in the symbol table.  We'll know because the 'prefix' should be
@@ -438,39 +450,39 @@ def encode(text: str):
                 # say that this is not a symbol and we need to go back to
                 # literals.
                 if char in first_chars and not mabulate_flag:
-                    print(f"... {repr(char)} is a prefix, looking for next symbol, mabulate flag -> True")
+                    log.debug(f"... {repr(char)} is a prefix, looking for next symbol, mabulate flag -> True")
                     # if alternate_matches:
-                    #     print(f"!!! alternate matches {alternate_matches}")
+                    #     log.debug(f"!!! alternate matches {alternate_matches}")
                     mabulate_flag = True
                     last_symbol = char
                 else:
                     # Have to switch to a literal block
-                    print(f"??? {to_write=}")
+                    log.debug(f"??? {to_write=}")
                     bits_output += output_symbols(symbols, output_lines, to_write)
                     to_write = []
                     state = 'literal'
                     if mabulate_flag:
-                        print(f"... mabulate flag True, also add {repr(last_symbol)}")
+                        log.debug(f"... mabulate flag True, also add {repr(last_symbol)}")
                         to_write.append(last_symbol)
                     mabulate_flag = False
-                    print(f"... mabulate flag -> False, go to literal mode and add {repr(char)}")
+                    log.debug(f"... mabulate flag -> False, go to literal mode and add {repr(char)}")
                     to_write.append(char)
             else:
                 if mabulate_flag:
-                    print("!!! mabulate flag True, in literal mode?  mabulate flag -> False")
+                    log.debug("!!! mabulate flag True, in literal mode?  mabulate flag -> False")
                     mabulate_flag = False
-                print(f"... add character {repr(char)}")
+                log.info(f"<-- {state}: last {repr(last_symbol)}+{repr(char)} ... add character {repr(char)}")
                 to_write.append(char)
             # Finally, this is the start of the next prefix we try to match.
             last_symbol = char
         else:
             mabulate_flag = False
-            print(f"matches symbol {repr(sought_symbol)} ({symbols[sought_symbol]['num']}) (mabulate -> False)")
+            log.debug(f"matches symbol {repr(sought_symbol)} ({symbols[sought_symbol]['num']}) (mabulate -> False)")
             # always more efficient to encode to symbols at this point
             if state == 'literal':
                 # The last byte in the literals is the prefix of this symbol, so
                 # we have to remove it from the output.
-                print(f"... removing {repr(to_write[-1])} from literals: prefix of new symbol")
+                log.debug(f"... removing {repr(to_write[-1])} from literals: prefix of new symbol")
                 to_write.pop()
                 bits_output += output_literals(output_lines, to_write)
                 to_write = []
@@ -481,7 +493,7 @@ def encode(text: str):
                 # rearrangement of the matched symbols screwing up what symbols
                 # have actually been seen by the decoder.
                 if try_shorter_symbol_matches:
-                    print("SSS " + ', '.join(
+                    log.debug("SSS " + ', '.join(
                         f"{symbols[sym]['num']}={repr(sym)}"
                         for sym in sorted(symbols.keys())
                     ))
@@ -492,12 +504,12 @@ def encode(text: str):
 
             last_symbol = sought_symbol
 
-    print(f"End of text.  State={state}, mabulate_flag={mabulate_flag}, sought_symbol={repr(sought_symbol)}, last_symbol={repr(last_symbol)}, char={repr(char)}")
+    log.info(f"End of text.  State={state}, mabulate_flag={mabulate_flag}, sought_symbol={repr(sought_symbol)}, last_symbol={repr(last_symbol)}, char={repr(char)}")
     if state == 'symbols':
         if not mabulate_flag:
             to_write.append(sought_symbol)
         if try_shorter_symbol_matches:
-            print(f"tss {to_write=}, {char=}, {highest_usable_symbol=}")
+            log.debug(f"tss {to_write=}, {char=}, {highest_usable_symbol=}")
             if to_write:
                 alternate_matches = find_all_sym_matches(symbols, to_write + [char], highest_usable_symbol)
                 minimal_encoding = []
@@ -508,7 +520,7 @@ def encode(text: str):
                     if not minimal_encoding or minimal_encoding_len > encoding_len:
                         minimal_encoding = match
                         minimal_encoding_len = encoding_len
-                    print("TSF alternate match [" + ', '.join(f"{repr(s)}={symbols[s]['num']}" for s in match) + f"] in {encoding_len} bits")
+                    log.debug("TSF alternate match [" + ', '.join(f"{repr(s)}={symbols[s]['num']}" for s in match) + f"] in {encoding_len} bits")
                 if minimal_encoding:
                     # This absorbs to_write and last_symbol, but leaves
                     # the next character.  We now have to continue here as
@@ -517,21 +529,21 @@ def encode(text: str):
                     encoding = get_symbol_encoding(symbols, minimal_encoding, move_to_front)  # now do move to front
                     last_symbol = char
                     mabulate_flag = False
-                    print(f"T$F new minimal {to_write=} {last_symbol=} mabulate -> False")
+                    log.debug(f"T$F new minimal {to_write=} {last_symbol=} mabulate -> False")
         bits_output += output_symbols(symbols, output_lines, to_write)
         to_write = []
 
     if mabulate_flag:
-        print(f"Un-mabulate {repr(last_symbol)} for output.")
+        log.debug(f"Un-mabulate {repr(last_symbol)} for output.")
         to_write.append(last_symbol)
     if to_write:
         bits_output += output_literals(output_lines, to_write)
         to_write = []
 
-    # print("Symbols:")
+    # log.debug("Symbols:")
     # for symbol in sorted(symbols, key=lambda s: symbols[s]['num']):
     #     sym_data = symbols[symbol]
-    #     print(
+    #     log.debug(
     #         f"{sym_data['num']:3d}: {repr(symbol)} "
     #         f"output {sym_data['used in output']} times, "
     #         f"prefixed {sym_data['used as prefix']} times, "
@@ -543,10 +555,10 @@ def encode(text: str):
 
 bits_output, output_lines = encode(text)
 
-print(f"Total input bits: {len(text)*8}")
-print(f"Total output bits: {bits_output}")
-print(f"Compression ratio: {len(text)*8/bits_output:0.4f}:1")
+log.info(f"Total input bits: {len(text)*8}")
+log.info(f"Total output bits: {bits_output}")
+log.info(f"Compression ratio: {len(text)*8/bits_output:0.4f}:1")
 
-print("Output:")
+log.info("Output:")
 for line in output_lines:
     print(line)
