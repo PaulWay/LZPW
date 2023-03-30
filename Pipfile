@@ -7,7 +7,7 @@ verify_ssl = true
 
 [packages]
 numpy = "*"
-bitstream = "*"
+bitio = "*"
 
 [requires]
 python_version = "3.8"
