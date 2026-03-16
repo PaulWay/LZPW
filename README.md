@@ -109,6 +109,3 @@ previously symbol number 7, all symbols from 2 to 6 are now renumbered 3 to 7.
 ## Requirements
 
 The `lzpw` library uses `pipenv` to install its requirements.
-
-Python development libraries (providing `Python.h`) need to be installed for
-the `bitstream` library.
