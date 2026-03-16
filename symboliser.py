@@ -23,6 +23,10 @@ parser.add_argument(
     help='Select one of the standard texts available'
 )
 parser.add_argument(
+    '--binary', '-b', default=False, action='store_true',
+    help='Set to read the file as bytes rather than as UTF-8'
+)
+parser.add_argument(
     '--variable-symbol-output', default=False, action='store_true',
     help='Output Fibonacci coded symbols rather than fixed-width symbols'
 )
@@ -65,7 +69,13 @@ else:
     log.setLevel(logging.WARNING)
 
 
-text = ''.join(args.file.readlines())
+if args.binary:
+    # there has to be a better way than re-opening the file
+    args.file.close()
+    f = open(args.file.name, mode='rb')
+else:
+    f = args.file
+text = f.read()
 
 save_text = ['save output to symbol table', 'discard output']
 symbol_text = ['output symbols', 'delete symbols']
@@ -175,6 +185,7 @@ def output_literals(output_lines: list, to_write: list, save=True):
 def new_symbol(symbols: dict, symbol: str, first_chars: set):
     if symbol in symbols:  # just in case
         return  # or should we do something like move-to-front here?
+    log.debug(f'new symbol')
     symbols[symbol] = {
         'num': len(symbols),
         'used as prefix': 0,
@@ -364,7 +375,7 @@ def encode(text: str):
     # State information
     symbols = {}
     first_chars = set()
-    last_symbol = ''
+    last_symbol = None
     state = 'literal'
     bits_output = 0
     mabulate_flag = False
@@ -373,6 +384,12 @@ def encode(text: str):
     highest_usable_symbol = 0   # only with try_shorter_symbol_matches
 
     for char in text:
+        if args.binary:
+            # This is a terrible hack for the way each byte in a bytes string
+            # is actually represented as an int.  But chr will reinterpret
+            # that as a string, escaping it if necessary, in a way that does
+            # not confuse dictionary keys or concatenation.
+            char = chr(char)
         if not last_symbol:
             last_symbol = char
             to_write.append(char)
@@ -477,7 +494,7 @@ def encode(text: str):
             last_symbol = char
         else:
             mabulate_flag = False
-            log.debug(f"matches symbol {repr(sought_symbol)} ({symbols[sought_symbol]['num']}) (mabulate -> False)")
+            log.info(f"<-- {state}: last {repr(last_symbol)}+{repr(char)} matches symbol {repr(sought_symbol)} ({symbols[sought_symbol]['num']}) (mabulate -> False)")
             # always more efficient to encode to symbols at this point
             if state == 'literal':
                 # The last byte in the literals is the prefix of this symbol, so
